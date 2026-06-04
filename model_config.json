@@ -1,0 +1,14 @@
+{
+  "MAX_LEN": 100,
+  "MAX_WORDS": 10000,
+  "EMBED_DIM": 64,
+  "HIDDEN_DIM": 64,
+  "VOCAB_SIZE": 237,
+  "label_classes": [
+    0,
+    1
+  ],
+  "num_classes": 2,
+  "test_accuracy": 0.4983922829581994,
+  "f1_score": 0.3315485144142528
+}
