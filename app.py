@@ -7,9 +7,9 @@ import os
 
 @st.cache_resource
 def load_model_and_config():
-    import tensorflow as tf
+    import keras
     base_path = os.path.dirname(os.path.abspath(__file__))
-    model = tf.keras.models.load_model(os.path.join(base_path, 'lstm_model.keras'))
+    model = keras.models.load_model(os.path.join(base_path, 'lstm_model.keras'))
     with open(os.path.join(base_path, 'tokenizer.pkl'), 'rb') as f:
         tokenizer = pickle.load(f)
     with open(os.path.join(base_path, 'model_config.json'), 'r') as f:
@@ -26,7 +26,7 @@ def clean_text(text):
     return text
 
 def predict_sentiment(text, model, tokenizer, config):
-    from tensorflow.keras.preprocessing.sequence import pad_sequences
+    from keras.preprocessing.sequence import pad_sequences
     cleaned = clean_text(text)
     seq = tokenizer.texts_to_sequences([cleaned])
     padded = pad_sequences(seq, maxlen=config['MAX_LEN'], padding='post', truncating='post')
@@ -44,95 +44,152 @@ def predict_sentiment(text, model, tokenizer, config):
         all_probs = {str(label_classes[0]): 1 - prob, str(label_classes[1]): prob}
     return str(label_classes[pred_idx]), confidence, all_probs
 
-st.set_page_config(page_title="Sentiment Analysis LSTM", page_icon="🧠", layout="wide")
+# ===================== PAGE CONFIG =====================
+
+st.set_page_config(
+    page_title="Sentiment Analysis LSTM",
+    page_icon="🧠",
+    layout="wide"
+)
 
 st.markdown("""
 <style>
-.result-card { padding:1.5rem; border-radius:12px; text-align:center; font-size:1.2rem; font-weight:600; margin:1rem 0; }
-.positive { background:#d1fae5; color:#065f46; border:2px solid #34d399; }
-.negative { background:#fee2e2; color:#991b1b; border:2px solid #f87171; }
-.neutral  { background:#e0f2fe; color:#0369a1; border:2px solid #38bdf8; }
+.result-card {
+    padding: 1.5rem;
+    border-radius: 12px;
+    text-align: center;
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 1rem 0;
+}
+.positive { background: #d1fae5; color: #065f46; border: 2px solid #34d399; }
+.negative { background: #fee2e2; color: #991b1b; border: 2px solid #f87171; }
+.neutral  { background: #e0f2fe; color: #0369a1; border: 2px solid #38bdf8; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🧠 Sentiment Analysis — LSTM")
-st.caption("Text Mining | Bidirectional LSTM")
+st.title("🧠 Sentiment Analysis — Bidirectional LSTM")
+st.caption("Text Mining | Tugas Machine Learning")
+
+# ===================== LOAD MODEL =====================
 
 with st.spinner("Loading model..."):
     model, tokenizer, config = load_model_and_config()
 
+# ===================== SIDEBAR =====================
+
 with st.sidebar:
-    st.markdown("### Model Info")
+    st.markdown("### 📊 Model Info")
     st.metric("Test Accuracy", f"{config['test_accuracy']*100:.1f}%")
     st.metric("F1 Score", f"{config['f1_score']:.4f}")
     st.markdown("---")
+    st.markdown("### ⚙️ Konfigurasi")
     st.write(f"**Vocab size:** {config['MAX_WORDS']:,}")
     st.write(f"**Max length:** {config['MAX_LEN']} tokens")
-    st.write(f"**Classes:** {', '.join([str(c) for c in config['label_classes']])}")
+    st.write(f"**Embedding dim:** {config['EMBEDDING_DIM']}")
+    st.write(f"**Kelas:** {', '.join([str(c) for c in config['label_classes']])}")
+    st.markdown("---")
     base = os.path.dirname(os.path.abspath(__file__))
-    for img_name, title in [('training_history.png','Training History'),('confusion_matrix.png','Confusion Matrix')]:
-        img_path = os.path.join(base, img_name)
-        if os.path.exists(img_path):
+    for fname, title in [('training_history.png', 'Training History'), ('confusion_matrix.png', 'Confusion Matrix')]:
+        fpath = os.path.join(base, fname)
+        if os.path.exists(fpath):
             st.markdown(f"### {title}")
-            st.image(img_path)
+            st.image(fpath)
+
+# ===================== MAIN =====================
 
 col1, col2 = st.columns([3, 2])
 
 with col1:
-    st.markdown("### Masukkan Teks")
-    user_text = st.text_area("Teks:", placeholder="Ketik teks di sini...", height=150, key="main_input")
+    st.markdown("### ✍️ Masukkan Teks")
+    user_text = st.text_area(
+        "Ketik atau paste teks di sini:",
+        placeholder="Contoh: Produk ini sangat bagus, pengiriman cepat!",
+        height=150,
+        key="main_input"
+    )
+
+    st.markdown("**Coba contoh:**")
     c1, c2, c3 = st.columns(3)
     examples = [
-        ("Positif", "Produk sangat memuaskan, kualitas terbaik dan harga terjangkau!"),
-        ("Negatif", "Barang rusak saat tiba, sangat mengecewakan."),
-        ("Netral",  "Barang sudah diterima sesuai estimasi.")
+        ("😊 Positif", "Produk sangat memuaskan, kualitas terbaik dan harga terjangkau!"),
+        ("😠 Negatif", "Barang rusak saat tiba, sangat mengecewakan dan tidak sesuai."),
+        ("😐 Netral",  "Barang sudah diterima. Pengiriman sesuai estimasi.")
     ]
     for col_btn, (lbl, ex) in zip([c1, c2, c3], examples):
         with col_btn:
             if st.button(lbl, use_container_width=True):
                 st.session_state['main_input'] = ex
                 st.rerun()
-    analyze = st.button("Analisis Sentimen", type="primary", use_container_width=True)
+
+    analyze = st.button("🔍 Analisis Sentimen", type="primary", use_container_width=True)
 
 with col2:
-    st.markdown("### Hasil")
+    st.markdown("### 📊 Hasil")
     if analyze and user_text.strip():
         with st.spinner("Menganalisis..."):
             sentiment, confidence, all_probs = predict_sentiment(user_text, model, tokenizer, config)
+
         s = sentiment.lower()
-        if any(w in s for w in ['pos','positif','positive','baik','bagus']):
-            css, emo = 'positive', 'Positif'
-        elif any(w in s for w in ['neg','negatif','negative','buruk']):
-            css, emo = 'negative', 'Negatif'
+        if any(w in s for w in ['pos', 'positif', 'positive', 'baik', 'bagus']):
+            css, label_display = 'positive', 'POSITIF'
+        elif any(w in s for w in ['neg', 'negatif', 'negative', 'buruk']):
+            css, label_display = 'negative', 'NEGATIF'
         else:
-            css, emo = 'neutral', 'Netral'
-        st.markdown(f'<div class="result-card {css}"><b>{emo}: {sentiment.upper()}</b><br><small>Confidence: {confidence*100:.1f}%</small></div>', unsafe_allow_html=True)
-        st.markdown("**Probabilitas:**")
+            css, label_display = 'neutral', 'NETRAL'
+
+        st.markdown(
+            f'<div class="result-card {css}">'
+            f'{label_display}: {sentiment.upper()}<br>'
+            f'<small>Confidence: {confidence*100:.1f}%</small>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown("**Distribusi Probabilitas:**")
         for lbl, prob in sorted(all_probs.items(), key=lambda x: -x[1]):
             st.progress(float(prob), text=f"{lbl}: {prob*100:.1f}%")
-        with st.expander("Detail preprocessing"):
-            st.write(f"**Asli:** {user_text[:200]}")
-            st.write(f"**Bersih:** {clean_text(user_text)[:200]}")
+
+        with st.expander("🔍 Detail Preprocessing"):
+            st.write(f"**Teks asli:** {user_text[:200]}")
+            st.write(f"**Teks bersih:** {clean_text(user_text)[:200]}")
+            st.write(f"**Jumlah kata:** {len(clean_text(user_text).split())}")
+
     elif analyze:
-        st.warning("Masukkan teks dulu!")
+        st.warning("Masukkan teks terlebih dahulu!")
     else:
-        st.info("Masukkan teks lalu klik Analisis")
+        st.info("Masukkan teks di sebelah kiri lalu klik Analisis")
+
+# ===================== BATCH =====================
 
 st.markdown("---")
-st.markdown("### Analisis Batch")
-batch = st.text_area("Beberapa teks (satu per baris):", height=100)
-if st.button("Analisis Semua"):
+st.markdown("### 📋 Analisis Batch")
+batch = st.text_area(
+    "Beberapa teks, satu per baris:",
+    placeholder="Teks pertama\nTeks kedua\nTeks ketiga",
+    height=100
+)
+
+if st.button("📊 Analisis Semua"):
     if batch.strip():
         import pandas as pd
         texts = [t.strip() for t in batch.split('\n') if t.strip()]
-        results, bar = [], st.progress(0)
+        results = []
+        bar = st.progress(0)
         for i, t in enumerate(texts):
             s, c, _ = predict_sentiment(t, model, tokenizer, config)
-            results.append({'No': i+1, 'Teks': t[:60], 'Sentimen': s, 'Confidence': f"{c*100:.1f}%"})
-            bar.progress((i+1)/len(texts))
+            results.append({
+                'No': i + 1,
+                'Teks': t[:60] + ('...' if len(t) > 60 else ''),
+                'Sentimen': s,
+                'Confidence': f"{c*100:.1f}%"
+            })
+            bar.progress((i + 1) / len(texts))
         df_res = pd.DataFrame(results)
         st.dataframe(df_res, use_container_width=True)
         st.bar_chart(df_res['Sentimen'].value_counts())
+    else:
+        st.warning("Masukkan teks dulu!")
 
 st.markdown("---")
 st.caption("LSTM Sentiment Analysis | Text Mining | TensorFlow + Streamlit")
